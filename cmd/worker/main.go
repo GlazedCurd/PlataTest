@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/GlazedCurd/PlataTest/internal/db"
@@ -40,9 +41,60 @@ func main() {
 			log.Fatalf("Failed to close database %s", err)
 		}
 	}()
-	limiter := rate.NewLimiter(rate.Every(1*time.Second), 5)
+
+	httpRequestTimeout := os.Getenv("HTTP_TIMEOUT")
+	if httpRequestTimeout == "" {
+		httpRequestTimeout = "10s"
+	}
+
+	httpRequestTimeoutDuration, err := time.ParseDuration(httpRequestTimeout)
+	if err != nil {
+		log.Fatalf("Invalid HTTP_TIMEOUT duration %s", err)
+	}
+
+	workerIteration := os.Getenv("WORKER_ITERATION")
+	if workerIteration == "" {
+		workerIteration = "30s"
+	}
+
+	workerIterationDuration, err := time.ParseDuration(workerIteration)
+	if err != nil {
+		log.Fatalf("Invalid WORKER_ITERATION duration %s", err)
+	}
+
+	rateLimit := os.Getenv("RATE_LIMIT")
+	if rateLimit == "" {
+		rateLimit = "1"
+	}
+
+	rateLimitInt, err := strconv.Atoi(rateLimit)
+	if err != nil {
+		log.Fatalf("Invalid RATE_LIMIT value %s", err)
+	}
+
+	numWorkers := os.Getenv("NUM_WORKERS")
+	if numWorkers == "" {
+		numWorkers = "5"
+	}
+
+	numWorkersInt, err := strconv.Atoi(numWorkers)
+	if err != nil {
+		log.Fatalf("Invalid NUM_WORKERS value %s", err)
+	}
+
+	retriesNum := os.Getenv("RETRIES_NUM")
+	if retriesNum == "" {
+		retriesNum = "5"
+	}
+
+	retriesNumInt, err := strconv.Atoi(retriesNum)
+	if err != nil {
+		log.Fatalf("Invalid RETRIES_NUM value %s", err)
+	}
+
+	limiter := rate.NewLimiter(rate.Every(10*time.Second), rateLimitInt)
 	httpClient := &http.Client{
-		Timeout: 10 * time.Second, // TODO: PASS timeout
+		Timeout: httpRequestTimeoutDuration,
 	}
 	exchangeratesapiApiKey := os.Getenv("EXCHANGERATESAPI_API_KEY")
 	if exchangeratesapiApiKey == "" {
@@ -52,6 +104,6 @@ func main() {
 	if exchangeratesapiBaseUrl == "" {
 		log.Fatal("EXCHANGERATESAPI_BASE_URL environment variable is not set")
 	}
-	quotaFetcher := quotafetcher.NewExchangeratesQuotaFetcher(httpClient, limiter, exchangeratesapiApiKey, exchangeratesapiBaseUrl)
-	worker.NewWorker(db, 10*time.Second, 5, zapLogger, quotaFetcher).Start()
+	quotaFetcher := quotafetcher.NewExchangeratesQuotaFetcher(httpClient, limiter, exchangeratesapiApiKey, exchangeratesapiBaseUrl, retriesNumInt)
+	worker.NewWorker(db, workerIterationDuration, numWorkersInt, zapLogger, quotaFetcher).Start()
 }

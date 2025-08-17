@@ -54,5 +54,5 @@ func main() {
 	if servicePort == "" {
 		servicePort = ":8080" // Default port if not set
 	}
-	r.Run(servicePort)
+	r.Run(":" + servicePort)
 }

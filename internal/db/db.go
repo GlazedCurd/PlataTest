@@ -176,7 +176,7 @@ func (d *dbImpl) GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (
 	err := d.database.QueryRowContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
-        WHERE code = $1 AND status = 'completed'
+        WHERE code = $1 AND status = 'success'
         ORDER BY created_at DESC
         LIMIT 1
     `, code).Scan(

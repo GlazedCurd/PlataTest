@@ -1,12 +1,10 @@
--- TODO: add users
+-- Можно и нужно добавить ещё и юзеров. Оставлю это за рамками
 CREATE TYPE quote_status AS ENUM (
     'pending',
     'success',
     'failed'
 );
 
-
--- TODO INDEXES
 
 CREATE TABLE IF NOT EXISTS quotes (
     id serial primary key,
@@ -20,3 +18,6 @@ CREATE TABLE IF NOT EXISTS quotes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (idempotency_key)
 );
+
+CREATE INDEX quotes_code ON quotes(code);
+CREATE INDEX quotes_status ON quotes(status);

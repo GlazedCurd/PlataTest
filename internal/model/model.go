@@ -2,7 +2,7 @@ package model
 
 import "time"
 
-type UpdateId = int
+type UpdateId = uint64
 type Code = string
 
 type Update struct {
