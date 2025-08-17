@@ -7,7 +7,7 @@ type Code = string
 
 type Update struct {
 	ID             UpdateId  `json:"id,omitempty"`
-	Price          *string   `json:"price,omitempty"`
+	Price          *float64  `json:"price,omitempty"`
 	Code           Code      `json:"code,omitempty"`
 	IdempotencyKey string    `json:"idempotency_key,omitempty"`
 	CreatedAt      time.Time `json:"created_at,omitempty"`

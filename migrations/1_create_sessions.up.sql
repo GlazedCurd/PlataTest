@@ -1,8 +1,7 @@
 -- TODO: add users
 CREATE TYPE quote_status AS ENUM (
     'pending',
-    'processing',
-    'completed',
+    'success',
     'failed'
 );
 
@@ -19,5 +18,5 @@ CREATE TABLE IF NOT EXISTS quotes (
     status quote_status DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (idempotency_key, code)
+    UNIQUE (idempotency_key)
 );

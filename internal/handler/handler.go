@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/GlazedCurd/PlataTest/internal/db"
@@ -21,8 +22,13 @@ func NewHandler(db db.DB, zapLogger *zap.Logger) *Handler {
 func (h *Handler) GetLatest(c *gin.Context) {
 	h.zapLogger.Info("Last update requested", zap.String("pair", c.Param("PAIR")))
 	pair := c.Param("PAIR")
-	lastUpdate, err := h.db.GetLastSuccessfulUpdate(model.Code(pair))
+	lastUpdate, err := h.db.GetLastSuccessfulUpdate(c.Request.Context(), model.Code(pair))
 	if err != nil {
+		if errors.Is(err, db.ErrorNotFound) {
+			h.zapLogger.Warn("Update not found", zap.String("pair", c.Param("PAIR")))
+			c.JSON(http.StatusNotFound, gin.H{"error": "Update not found"})
+			return
+		}
 		h.zapLogger.Error("Failed to get last successful update", zap.String("pair", pair), zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get last successful update"})
 		return
@@ -38,8 +44,13 @@ func (h *Handler) RequestUpdate(c *gin.Context) {
 	}
 	update.Code = model.Code(c.Param("PAIR"))
 	h.zapLogger.Info("New update requested", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey))
-	insertedUpdate, err := h.db.InsertUpdate(&update)
+	insertedUpdate, err := h.db.InsertUpdate(c.Request.Context(), &update)
 	if err != nil {
+		if errors.Is(err, db.ErrorConflictWithDifferentBody) {
+			h.zapLogger.Warn("Conflict with different body", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey))
+			c.JSON(http.StatusConflict, gin.H{"error": "Conflict with different body"})
+			return
+		}
 		h.zapLogger.Error("Failed to insert update", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey), zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert update"})
 		return
@@ -50,8 +61,13 @@ func (h *Handler) RequestUpdate(c *gin.Context) {
 func (h *Handler) GetUpdate(c *gin.Context) {
 	updateId := c.GetUint64("UPDATE_ID")
 	h.zapLogger.Info("Last update requested", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
-	update, err := h.db.GetUpdate(model.UpdateId(updateId))
+	update, err := h.db.GetUpdate(c.Request.Context(), model.UpdateId(updateId))
 	if err != nil {
+		if errors.Is(err, db.ErrorNotFound) {
+			h.zapLogger.Warn("Update not found", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
+			c.JSON(http.StatusNotFound, gin.H{"error": "Update not found"})
+			return
+		}
 		h.zapLogger.Error("Failed to get update", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)), zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get update"})
 		return
