@@ -13,6 +13,9 @@ def test_currency_request(api_base_url):
     pair = "EUR_USD"
     response = requests.post(f"{api_base_url}/quotes/{pair}/update", '{"idempotency_key":"abcdefghij9"}')
     assert response.status_code == 200
+    update_id = response.json()["id"]
+    response = requests.get(f"{api_base_url}/quotes/{pair}/update/{update_id}")
+    assert response.status_code == 200
 
 def test_request_without_last(api_base_url):
     pair = "EUR_MXN"

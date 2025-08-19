@@ -5,6 +5,11 @@ import "time"
 type UpdateId = uint64
 type Code = string
 
+const (
+	STATUS_SUCCESS = "success"
+	STATUS_FAILED  = "failed"
+)
+
 type Update struct {
 	ID             UpdateId  `json:"id,omitempty"`
 	Price          *float64  `json:"price,omitempty"`

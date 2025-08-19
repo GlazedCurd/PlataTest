@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/GlazedCurd/PlataTest/internal/db"
 	"github.com/GlazedCurd/PlataTest/internal/model"
@@ -15,8 +16,12 @@ type Handler struct {
 	zapLogger *zap.Logger
 }
 
-func NewHandler(db db.DB, zapLogger *zap.Logger) *Handler {
-	return &Handler{db: db, zapLogger: zapLogger}
+func SetupHandlers(r *gin.Engine, db db.DB, zapLogger *zap.Logger) {
+	h := &Handler{db: db, zapLogger: zapLogger}
+	// Set up routes
+	r.GET("/quotes/:PAIR", h.GetLatest)
+	r.POST("/quotes/:PAIR/update", h.RequestUpdate)
+	r.GET("/quotes/:PAIR/update/:UPDATE_ID", h.GetUpdate)
 }
 
 func (h *Handler) GetLatest(c *gin.Context) {
@@ -59,9 +64,14 @@ func (h *Handler) RequestUpdate(c *gin.Context) {
 }
 
 func (h *Handler) GetUpdate(c *gin.Context) {
-	updateId := c.GetUint64("UPDATE_ID")
-	h.zapLogger.Info("Last update requested", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
-	update, err := h.db.GetUpdate(c.Request.Context(), model.UpdateId(updateId))
+	updateId, err := strconv.Atoi(c.Param("UPDATE_ID"))
+	if err != nil {
+		h.zapLogger.Warn("Invalid update ID", zap.String("pair", c.Param("PAIR")), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid update ID"})
+		return
+	}
+	h.zapLogger.Info("Update requested", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
+	update, err := h.db.GetUpdate(c.Request.Context(), model.Code(c.Param("PAIR")), model.UpdateId(updateId))
 	if err != nil {
 		if errors.Is(err, db.ErrorNotFound) {
 			h.zapLogger.Warn("Update not found", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))

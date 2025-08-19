@@ -30,7 +30,7 @@ func (w *Worker) worker(ctx context.Context, update chan *model.Update, wg *sync
 		quota, err := w.quotaFetcher.FetchQuota(ctx, update.Code, w.log.With(zap.Uint64("update_id", update.ID)))
 		if err != nil {
 			w.log.Error("Failed to fetch quota", zap.Error(err))
-			update.Status = "failed"
+			update.Status = model.STATUS_FAILED
 			_, err = w.db.UpdateUpdate(ctx, update)
 			if err != nil {
 				w.log.Error("Failed to update quote status", zap.Error(err))
@@ -38,7 +38,7 @@ func (w *Worker) worker(ctx context.Context, update chan *model.Update, wg *sync
 			continue
 		}
 		update.Price = &quota
-		update.Status = "success"
+		update.Status = model.STATUS_SUCCESS
 		_, err = w.db.UpdateUpdate(ctx, update)
 		if err != nil {
 			w.log.Error("Failed to update quote status", zap.Error(err))

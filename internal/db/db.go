@@ -20,7 +20,7 @@ type DB interface {
 	Close() error
 	InsertUpdate(ctx context.Context, update *model.Update) (*model.Update, error)
 	UpdateUpdate(ctx context.Context, update *model.Update) (*model.Update, error)
-	GetUpdate(ctx context.Context, updateId model.UpdateId) (*model.Update, error)
+	GetUpdate(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error)
 	GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (*model.Update, error)
 	GetRecentlyUpdatesToProcess(ctx context.Context) ([]model.Update, error)
 }
@@ -116,13 +116,13 @@ func (d *dbImpl) InsertUpdate(ctx context.Context, update *model.Update) (*model
 	return &updateRes, nil
 }
 
-func (d *dbImpl) GetUpdate(ctx context.Context, updateId model.UpdateId) (*model.Update, error) {
+func (d *dbImpl) GetUpdate(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error) {
 	var update model.Update
 	err := d.database.QueryRowContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
-        WHERE id = $1
-    `, updateId).Scan(
+        WHERE id = $1 AND code = $2
+    `, updateId, code).Scan(
 		&update.ID,
 		&update.Code,
 		&update.IdempotencyKey,

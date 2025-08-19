@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Currency Quote API
+  description: API for fetching and managing currency exchange rate quotes
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /quotes/{pair}:
+    get:
+      summary: Get latest quote for a currency pair
+      description: Returns the latest successful quote for the specified currency pair
+      parameters:
+        - name: pair
+          in: path
+          required: true
+          description: Currency pair in format BASE_TARGET (e.g., USD_EUR)
+          schema:
+            type: string
+            pattern: ^[A-Z]{3}_[A-Z]{3}$
+            example: USD_EUR
+      responses:
+        '200':
+          description: Latest quote found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '404':
+          description: No successful quote found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /quotes/{pair}/update/{update_id}:
+    get:
+      summary: Get specific quote by ID
+      description: Returns a specific quote by its ID
+      parameters:
+        - name: pair
+          in: path
+          required: true
+          description: Currency pair in format BASE_TARGET (e.g., USD_EUR)
+          schema:
+            type: string
+            pattern: ^[A-Z]{3}_[A-Z]{3}$
+            example: USD_EUR
+        - name: update_id
+          in: path
+          required: true
+          description: Quote update ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Quote found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid update ID
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Quote not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /quotes/{pair}/update:
+    post:
+      summary: Request a quote update
+      description: Creates a new quote update request for the specified currency pair
+      parameters:
+        - name: pair
+          in: path
+          required: true
+          description: Currency pair in format BASE_TARGET (e.g., USD_EUR)
+          schema:
+            type: string
+            pattern: ^[A-Z]{3}_[A-Z]{3}$
+            example: USD_EUR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - idempotency_key
+              properties:
+                idempotency_key:
+                  type: string
+                  format: uuid
+                  description: Unique identifier for the request to ensure idempotency
+      responses:
+        '200':
+          description: Quote request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Conflict with existing request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Quote:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Unique identifier of the quote
+        code:
+          type: string
+          description: Currency pair code (e.g., USD_EUR)
+          pattern: ^[A-Z]{3}_[A-Z]{3}$
+        idempotency_key:
+          type: string
+          format: uuid
+          description: Unique key to ensure request idempotency
+        quote:
+          type: number
+          format: double
+          description: Exchange rate value
+          nullable: true
+        status:
+          type: string
+          enum: [pending, success, failed]
+          description: Current status of the quote
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the quote was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the quote was last updated
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message

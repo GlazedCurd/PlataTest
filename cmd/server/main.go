@@ -42,12 +42,7 @@ func main() {
 		}
 	}()
 
-	h := handler.NewHandler(db, zapLogger)
-
-	// Set up routes
-	r.GET("/quotes/:PAIR", h.GetLatest)
-	r.POST("/quotes/:PAIR/update", h.RequestUpdate)
-	r.GET("/quotes/:PAIR/update/:UPDATE_ID", h.GetUpdate)
+	handler.SetupHandlers(r, db, zapLogger)
 
 	// Start the HTTP server
 	servicePort := os.Getenv("SERVICE_PORT")
