@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/GlazedCurd/PlataTest/internal/db"
 	"github.com/GlazedCurd/PlataTest/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/assert/v2"
@@ -201,4 +202,67 @@ func TestGetSpec(t *testing.T) {
 		t.Fatal("failed to unmarshal responce")
 	}
 	assert.Equal(t, response, *updateExpected)
+}
+
+func TestInsertConflict(t *testing.T) {
+	r := gin.Default()
+	dbmock := NewDbMock()
+
+	idempotencyKey := "abcd"
+
+	dbmock.insertUpdate = func(ctx context.Context, update *model.Update) (*model.Update, error) {
+		assert.Equal(t, update.IdempotencyKey, idempotencyKey)
+		assert.Equal(t, update.Code, "EUR_USD")
+		assert.Equal(t, update.ID, model.UpdateId(0))
+		return nil, fmt.Errorf("conflict with different body: %w", db.ErrorConflictWithDifferentBody)
+	}
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatal("failed to create logger")
+	}
+	SetupHandlers(r, dbmock, logger)
+
+	w := httptest.NewRecorder()
+
+	// Create an example user for testing
+	request := struct {
+		IdempotencyKey string `json:"idempotency_key,omitempty"`
+	}{
+		IdempotencyKey: "abcd",
+	}
+	requestJson, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal("failed to marshal request")
+	}
+	pair := "EUR_USD"
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/quotes/%s/update", pair), strings.NewReader(string(requestJson)))
+	r.ServeHTTP(w, req)
+	assert.Equal(t, w.Code, 409)
+}
+
+func TestGetSpecNotFound(t *testing.T) {
+	r := gin.Default()
+	dbmock := NewDbMock()
+
+	updateId := model.UpdateId(1)
+
+	dbmock.getUpdate = func(ctx context.Context, code model.Code, update model.UpdateId) (*model.Update, error) {
+		assert.Equal(t, code, "EUR_USD")
+		assert.Equal(t, update, updateId)
+		return nil, fmt.Errorf("not found: %w", db.ErrorNotFound)
+	}
+
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		t.Fatal("failed to create logger")
+	}
+	SetupHandlers(r, dbmock, logger)
+
+	w := httptest.NewRecorder()
+
+	pair := "EUR_USD"
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s/update/%d", pair, updateId), nil)
+	r.ServeHTTP(w, req)
+	assert.Equal(t, w.Code, 404)
 }

@@ -51,3 +51,11 @@ curl localhost:8080/quotes/EUR_USD/update/22
 ```
 
 ### Endpoints
+
+
+### Примечание
+`USD_MXN` не обрабатывается exchangeratesapi.io
+с ошибкой 
+```
+{"error":{"code":"base_currency_access_restricted","message":"An unexpected error ocurred. [Technical Support: support@apilayer.com]"}}
+```
