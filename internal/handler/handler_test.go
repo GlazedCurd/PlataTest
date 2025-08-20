@@ -211,10 +211,10 @@ func TestInsertConflict(t *testing.T) {
 
 	idempotencyKey := "abcd"
 
-	dbmock.insertUpdate = func(ctx context.Context, update *model.Update) (*model.Update, error) {
+	dbmock.insertTask = func(ctx context.Context, update *model.Task) (*model.Task, error) {
 		assert.Equal(t, update.IdempotencyKey, idempotencyKey)
 		assert.Equal(t, update.Code, "EUR_USD")
-		assert.Equal(t, update.ID, model.UpdateId(0))
+		assert.Equal(t, update.ID, model.TaskId(0))
 		return nil, fmt.Errorf("conflict with different body: %w", db.ErrorConflictWithDifferentBody)
 	}
 
@@ -237,7 +237,7 @@ func TestInsertConflict(t *testing.T) {
 		t.Fatal("failed to marshal request")
 	}
 	pair := "EUR_USD"
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/quotes/%s/update", pair), strings.NewReader(string(requestJson)))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/quotes/%s/task", pair), strings.NewReader(string(requestJson)))
 	r.ServeHTTP(w, req)
 	assert.Equal(t, w.Code, 409)
 }
@@ -246,9 +246,9 @@ func TestGetSpecNotFound(t *testing.T) {
 	r := gin.Default()
 	dbmock := NewDbMock()
 
-	updateId := model.UpdateId(1)
+	updateId := model.TaskId(1)
 
-	dbmock.getUpdate = func(ctx context.Context, code model.Code, update model.UpdateId) (*model.Update, error) {
+	dbmock.getTask = func(ctx context.Context, code model.Code, update model.TaskId) (*model.Task, error) {
 		assert.Equal(t, code, "EUR_USD")
 		assert.Equal(t, update, updateId)
 		return nil, fmt.Errorf("not found: %w", db.ErrorNotFound)
@@ -263,7 +263,7 @@ func TestGetSpecNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	pair := "EUR_USD"
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s/update/%d", pair, updateId), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s/task/%d", pair, updateId), nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, w.Code, 404)
 }

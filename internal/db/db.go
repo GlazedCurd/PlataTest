@@ -181,7 +181,7 @@ func (d *dbImpl) GetLastSuccessfulTask(ctx context.Context, code model.Code) (*m
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
         WHERE code = $1 AND status = 'success'
-        ORDER BY created_at DESC
+        ORDER BY updated_at DESC
         LIMIT 1
     `, code).Scan(
 		&task.ID,
