@@ -20,67 +20,67 @@ func SetupHandlers(r *gin.Engine, db db.DB, zapLogger *zap.Logger) {
 	h := &Handler{db: db, zapLogger: zapLogger}
 	// Set up routes
 	r.GET("/quotes/:PAIR", h.GetLatest)
-	r.POST("/quotes/:PAIR/update", h.RequestUpdate)
-	r.GET("/quotes/:PAIR/update/:UPDATE_ID", h.GetUpdate)
+	r.POST("/quotes/:PAIR/task", h.RequestTask)
+	r.GET("/quotes/:PAIR/task/:TASK_ID", h.GetTask)
 }
 
 func (h *Handler) GetLatest(c *gin.Context) {
-	h.zapLogger.Info("Last update requested", zap.String("pair", c.Param("PAIR")))
+	h.zapLogger.Info("Last task requested", zap.String("pair", c.Param("PAIR")))
 	pair := c.Param("PAIR")
-	lastUpdate, err := h.db.GetLastSuccessfulUpdate(c.Request.Context(), model.Code(pair))
+	lastTask, err := h.db.GetLastSuccessfulTask(c.Request.Context(), model.Code(pair))
 	if err != nil {
 		if errors.Is(err, db.ErrorNotFound) {
-			h.zapLogger.Warn("Update not found", zap.String("pair", c.Param("PAIR")))
-			c.JSON(http.StatusNotFound, gin.H{"error": "Update not found"})
+			h.zapLogger.Error("Task not found", zap.String("pair", c.Param("PAIR")))
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
-		h.zapLogger.Error("Failed to get last successful update", zap.String("pair", pair), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get last successful update"})
+		h.zapLogger.Error("get last successful task", zap.String("pair", pair), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get last successful task"})
 		return
 	}
-	c.JSON(http.StatusOK, lastUpdate)
+	c.JSON(http.StatusOK, lastTask)
 }
 
-func (h *Handler) RequestUpdate(c *gin.Context) {
-	var update model.Update
-	if err := c.ShouldBindJSON(&update); err != nil {
+func (h *Handler) RequestTask(c *gin.Context) {
+	var task model.Task
+	if err := c.ShouldBindJSON(&task); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	update.Code = model.Code(c.Param("PAIR"))
-	h.zapLogger.Info("New update requested", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey))
-	insertedUpdate, err := h.db.InsertUpdate(c.Request.Context(), &update)
+	task.Code = model.Code(c.Param("PAIR"))
+	h.zapLogger.Info("New task requested", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", task.IdempotencyKey))
+	insertedTask, err := h.db.InsertTask(c.Request.Context(), &task)
 	if err != nil {
 		if errors.Is(err, db.ErrorConflictWithDifferentBody) {
-			h.zapLogger.Warn("Conflict with different body", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey))
+			h.zapLogger.Error("Conflict with different body", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", task.IdempotencyKey))
 			c.JSON(http.StatusConflict, gin.H{"error": "Conflict with different body"})
 			return
 		}
-		h.zapLogger.Error("Failed to insert update", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", update.IdempotencyKey), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert update"})
+		h.zapLogger.Error("insert task", zap.String("pair", c.Param("PAIR")), zap.String("idempotency_key", task.IdempotencyKey), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to insert task"})
 		return
 	}
-	c.JSON(http.StatusOK, insertedUpdate)
+	c.JSON(http.StatusOK, insertedTask)
 }
 
-func (h *Handler) GetUpdate(c *gin.Context) {
-	updateId, err := strconv.Atoi(c.Param("UPDATE_ID"))
+func (h *Handler) GetTask(c *gin.Context) {
+	taskId, err := strconv.Atoi(c.Param("TASK_ID"))
 	if err != nil {
-		h.zapLogger.Warn("Invalid update ID", zap.String("pair", c.Param("PAIR")), zap.Error(err))
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid update ID"})
+		h.zapLogger.Error("Invalid task ID", zap.String("pair", c.Param("PAIR")), zap.Error(err))
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid task ID"})
 		return
 	}
-	h.zapLogger.Info("Update requested", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
-	update, err := h.db.GetUpdate(c.Request.Context(), model.Code(c.Param("PAIR")), model.UpdateId(updateId))
+	h.zapLogger.Info("Task requested", zap.String("pair", c.Param("PAIR")), zap.Int("task_id", int(taskId)))
+	task, err := h.db.GetTask(c.Request.Context(), model.Code(c.Param("PAIR")), model.TaskId(taskId))
 	if err != nil {
 		if errors.Is(err, db.ErrorNotFound) {
-			h.zapLogger.Warn("Update not found", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)))
-			c.JSON(http.StatusNotFound, gin.H{"error": "Update not found"})
+			h.zapLogger.Error("Task not found", zap.String("pair", c.Param("PAIR")), zap.Int("task_id", int(taskId)))
+			c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
 			return
 		}
-		h.zapLogger.Error("Failed to get update", zap.String("pair", c.Param("PAIR")), zap.Int("update_id", int(updateId)), zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get update"})
+		h.zapLogger.Error("get task", zap.String("pair", c.Param("PAIR")), zap.Int("task_id", int(taskId)), zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get task"})
 		return
 	}
-	c.JSON(http.StatusOK, update)
+	c.JSON(http.StatusOK, task)
 }

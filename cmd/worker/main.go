@@ -27,18 +27,23 @@ func main() {
 
 	zapLogger, err := zap.NewProduction()
 	if err != nil {
-		log.Fatalf("failed to initialize zap logger %s", err)
+		log.Fatalf("Initializing zap logger %s", err)
 	}
-	defer zapLogger.Sync()
+	defer func() {
+		err := zapLogger.Sync()
+		if err != nil {
+			log.Fatalf("Syncing zap logger %s", err)
+		}
+	}()
 
 	db, err := db.ConnectDB(databaseHost, databasePort, databaseUser, databasePassword, databaseName)
 	if err != nil {
-		log.Fatalf("failed to establish connection to database %s", err)
+		log.Fatalf("Establishing connection to database %s", err)
 	}
 	defer func() {
 		err := db.Close()
 		if err != nil {
-			log.Fatalf("Failed to close database %s", err)
+			log.Fatalf("Closing database %s", err)
 		}
 	}()
 

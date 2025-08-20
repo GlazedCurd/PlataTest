@@ -36,7 +36,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /quotes/{pair}/update/{update_id}:
+  /quotes/{pair}/task/{task_id}:
     get:
       summary: Get specific quote by ID
       description: Returns a specific quote by its ID
@@ -49,10 +49,10 @@ paths:
             type: string
             pattern: ^[A-Z]{3}_[A-Z]{3}$
             example: USD_EUR
-        - name: update_id
+        - name: task_id
           in: path
           required: true
-          description: Quote update ID
+          description: Quote task ID
           schema:
             type: integer
             format: int64
@@ -64,7 +64,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Quote'
         '400':
-          description: Invalid update ID
+          description: Invalid task ID
           content:
             application/json:
               schema:
@@ -82,10 +82,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /quotes/{pair}/update:
+  /quotes/{pair}/task:
     post:
-      summary: Request a quote update
-      description: Creates a new quote update request for the specified currency pair
+      summary: Request a quote task
+      description: Creates a new quote task request for the specified currency pair
       parameters:
         - name: pair
           in: path

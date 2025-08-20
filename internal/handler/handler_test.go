@@ -17,32 +17,32 @@ import (
 )
 
 type dbMock struct {
-	getConflictedUpdate         func(ctx context.Context, idempotencyKey string, code model.Code) (*model.Update, error)
-	insertUpdate                func(ctx context.Context, update *model.Update) (*model.Update, error)
-	getUpdate                   func(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error)
-	updateUpdate                func(ctx context.Context, update *model.Update) (*model.Update, error)
-	getLastSuccessfulUpdate     func(ctx context.Context, code model.Code) (*model.Update, error)
-	getRecentlyUpdatesToProcess func(ctx context.Context) ([]model.Update, error)
+	getConflictedTask         func(ctx context.Context, idempotencyKey string, code model.Code) (*model.Task, error)
+	insertTask                func(ctx context.Context, task *model.Task) (*model.Task, error)
+	getTask                   func(ctx context.Context, code model.Code, taskId model.TaskId) (*model.Task, error)
+	taskTask                  func(ctx context.Context, task *model.Task) (*model.Task, error)
+	getLastSuccessfulTask     func(ctx context.Context, code model.Code) (*model.Task, error)
+	getRecentlyTasksToProcess func(ctx context.Context) ([]model.Task, error)
 }
 
 func NewDbMock() *dbMock {
 	return &dbMock{
-		getConflictedUpdate: func(ctx context.Context, idempotencyKey string, code model.Code) (*model.Update, error) {
+		getConflictedTask: func(ctx context.Context, idempotencyKey string, code model.Code) (*model.Task, error) {
 			return nil, nil
 		},
-		insertUpdate: func(ctx context.Context, update *model.Update) (*model.Update, error) {
+		insertTask: func(ctx context.Context, task *model.Task) (*model.Task, error) {
 			return nil, nil
 		},
-		getUpdate: func(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error) {
+		getTask: func(ctx context.Context, code model.Code, taskId model.TaskId) (*model.Task, error) {
 			return nil, nil
 		},
-		updateUpdate: func(ctx context.Context, update *model.Update) (*model.Update, error) {
+		taskTask: func(ctx context.Context, task *model.Task) (*model.Task, error) {
 			return nil, nil
 		},
-		getLastSuccessfulUpdate: func(ctx context.Context, code model.Code) (*model.Update, error) {
+		getLastSuccessfulTask: func(ctx context.Context, code model.Code) (*model.Task, error) {
 			return nil, nil
 		},
-		getRecentlyUpdatesToProcess: func(ctx context.Context) ([]model.Update, error) {
+		getRecentlyTasksToProcess: func(ctx context.Context) ([]model.Task, error) {
 			return nil, nil
 		},
 	}
@@ -52,28 +52,28 @@ func (d *dbMock) Close() error {
 	return nil
 }
 
-func (d *dbMock) GetConflictedUpdate(ctx context.Context, idempotencyKey string, code model.Code) (*model.Update, error) {
-	return d.getConflictedUpdate(ctx, idempotencyKey, code)
+func (d *dbMock) GetConflictedTask(ctx context.Context, idempotencyKey string, code model.Code) (*model.Task, error) {
+	return d.getConflictedTask(ctx, idempotencyKey, code)
 }
 
-func (d *dbMock) InsertUpdate(ctx context.Context, update *model.Update) (*model.Update, error) {
-	return d.insertUpdate(ctx, update)
+func (d *dbMock) InsertTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	return d.insertTask(ctx, task)
 }
 
-func (d *dbMock) GetUpdate(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error) {
-	return d.getUpdate(ctx, code, updateId)
+func (d *dbMock) GetTask(ctx context.Context, code model.Code, taskId model.TaskId) (*model.Task, error) {
+	return d.getTask(ctx, code, taskId)
 }
 
-func (d *dbMock) UpdateUpdate(ctx context.Context, update *model.Update) (*model.Update, error) {
-	return d.updateUpdate(ctx, update)
+func (d *dbMock) UpdateTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	return d.taskTask(ctx, task)
 }
 
-func (d *dbMock) GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (*model.Update, error) {
-	return d.getLastSuccessfulUpdate(ctx, code)
+func (d *dbMock) GetLastSuccessfulTask(ctx context.Context, code model.Code) (*model.Task, error) {
+	return d.getLastSuccessfulTask(ctx, code)
 }
 
-func (d *dbMock) GetRecentlyUpdatesToProcess(ctx context.Context) ([]model.Update, error) {
-	return d.getRecentlyUpdatesToProcess(ctx)
+func (d *dbMock) GetRecentlyTasksToProcess(ctx context.Context) ([]model.Task, error) {
+	return d.getRecentlyTasksToProcess(ctx)
 }
 
 func TestInsert(t *testing.T) {
@@ -82,7 +82,7 @@ func TestInsert(t *testing.T) {
 
 	idempotencyKey := "abcd"
 	price := float64(0.0)
-	updateExpected := &model.Update{
+	taskExpected := &model.Task{
 		ID:             1,
 		IdempotencyKey: idempotencyKey,
 		Code:           "EUR_USD",
@@ -90,17 +90,18 @@ func TestInsert(t *testing.T) {
 		Status:         model.STATUS_SUCCESS,
 	}
 
-	dbmock.insertUpdate = func(ctx context.Context, update *model.Update) (*model.Update, error) {
-		assert.Equal(t, update.IdempotencyKey, idempotencyKey)
-		assert.Equal(t, update.Code, "EUR_USD")
-		assert.Equal(t, update.ID, model.UpdateId(0))
-		return updateExpected, nil
+	dbmock.insertTask = func(ctx context.Context, task *model.Task) (*model.Task, error) {
+		assert.Equal(t, task.IdempotencyKey, idempotencyKey)
+		assert.Equal(t, task.Code, "EUR_USD")
+		assert.Equal(t, task.ID, model.TaskId(0))
+		return taskExpected, nil
 	}
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		t.Fatal("failed to create logger")
+		t.Fatal("create logger")
 	}
+	defer logger.Sync()
 	SetupHandlers(r, dbmock, logger)
 
 	w := httptest.NewRecorder()
@@ -113,17 +114,17 @@ func TestInsert(t *testing.T) {
 	}
 	requestJson, err := json.Marshal(request)
 	if err != nil {
-		t.Fatal("failed to marshal request")
+		t.Fatalf("marshal request %s", err)
 	}
 	pair := "EUR_USD"
-	req, _ := http.NewRequest("POST", fmt.Sprintf("/quotes/%s/update", pair), strings.NewReader(string(requestJson)))
+	req, _ := http.NewRequest("POST", fmt.Sprintf("/quotes/%s/task", pair), strings.NewReader(string(requestJson)))
 	r.ServeHTTP(w, req)
 	assert.Equal(t, w.Code, 200)
-	var response model.Update
+	var response model.Task
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatal("failed to unmarshal responce")
+		t.Fatalf("unmarshal responce %s", err)
 	}
-	assert.Equal(t, response, updateExpected)
+	assert.Equal(t, response, taskExpected)
 }
 
 func TestGetLast(t *testing.T) {
@@ -132,7 +133,7 @@ func TestGetLast(t *testing.T) {
 
 	idempotencyKey := "abcd"
 	price := float64(0.0)
-	updateExpected := &model.Update{
+	taskExpected := &model.Task{
 		ID:             1,
 		IdempotencyKey: idempotencyKey,
 		Code:           "EUR_USD",
@@ -140,14 +141,14 @@ func TestGetLast(t *testing.T) {
 		Status:         model.STATUS_SUCCESS,
 	}
 
-	dbmock.getLastSuccessfulUpdate = func(ctx context.Context, code model.Code) (*model.Update, error) {
+	dbmock.getLastSuccessfulTask = func(ctx context.Context, code model.Code) (*model.Task, error) {
 		assert.Equal(t, code, "EUR_USD")
-		return updateExpected, nil
+		return taskExpected, nil
 	}
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		t.Fatal("failed to create logger")
+		t.Fatalf("Creating logger %s", err)
 	}
 	SetupHandlers(r, dbmock, logger)
 
@@ -157,11 +158,11 @@ func TestGetLast(t *testing.T) {
 	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s", pair), nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, w.Code, 200)
-	var response model.Update
+	var response model.Task
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatal("failed to unmarshal responce")
+		t.Fatalf("Unmarshal response %s", err)
 	}
-	assert.Equal(t, response, *updateExpected)
+	assert.Equal(t, response, *taskExpected)
 }
 
 func TestGetSpec(t *testing.T) {
@@ -170,38 +171,38 @@ func TestGetSpec(t *testing.T) {
 
 	idempotencyKey := "abcd"
 	price := float64(0.0)
-	updateId := model.UpdateId(1)
-	updateExpected := &model.Update{
-		ID:             updateId,
+	taskId := model.TaskId(1)
+	taskExpected := &model.Task{
+		ID:             taskId,
 		IdempotencyKey: idempotencyKey,
 		Code:           "EUR_USD",
 		Price:          &price,
 		Status:         model.STATUS_SUCCESS,
 	}
 
-	dbmock.getUpdate = func(ctx context.Context, code model.Code, update model.UpdateId) (*model.Update, error) {
+	dbmock.getTask = func(ctx context.Context, code model.Code, task model.TaskId) (*model.Task, error) {
 		assert.Equal(t, code, "EUR_USD")
-		assert.Equal(t, update, updateId)
-		return updateExpected, nil
+		assert.Equal(t, task, taskId)
+		return taskExpected, nil
 	}
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
-		t.Fatal("failed to create logger")
+		t.Fatalf("Creating logger %s", err)
 	}
 	SetupHandlers(r, dbmock, logger)
 
 	w := httptest.NewRecorder()
 
 	pair := "EUR_USD"
-	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s/update/%d", pair, updateId), nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/quotes/%s/task/%d", pair, taskId), nil)
 	r.ServeHTTP(w, req)
 	assert.Equal(t, w.Code, 200)
-	var response model.Update
+	var response model.Task
 	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Fatal("failed to unmarshal responce")
+		t.Fatalf("Unmarshal response %s", err)
 	}
-	assert.Equal(t, response, *updateExpected)
+	assert.Equal(t, response, *taskExpected)
 }
 
 func TestInsertConflict(t *testing.T) {

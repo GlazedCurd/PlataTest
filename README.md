@@ -17,7 +17,7 @@
 
 Пример запроса на обновление котировки:
 ```
-$ curl localhost:8080/quotes/EUR_USD/update -d '{ "idempotency_key":"abcdefghij1324"}'
+$ curl localhost:8080/quotes/EUR_USD/task -d '{ "idempotency_key":"abcdefghij1324"}'
 ```
 Ответ 
 ```
@@ -47,7 +47,7 @@ curl localhost:8080/quotes/EUR_USD
 
 Пример запроса конкретной котировки 
 ```
-curl localhost:8080/quotes/EUR_USD/update/22
+curl localhost:8080/quotes/EUR_USD/task/22
 ```
 
 ### Endpoints

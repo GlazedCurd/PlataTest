@@ -23,25 +23,25 @@ func NewWorker(db db.DB, tick time.Duration, numWorkers int, logger *zap.Logger,
 	return &Worker{db: db, tick: tick, numWorkers: numWorkers, log: logger, quotaFetcher: quotaFetcher}
 }
 
-func (w *Worker) worker(ctx context.Context, update chan *model.Update, wg *sync.WaitGroup) {
+func (w *Worker) worker(ctx context.Context, task chan *model.Task, wg *sync.WaitGroup) {
 	defer wg.Done()
-	for update := range update {
-		w.log.Info("Processing update", zap.Any("update", update))
-		quota, err := w.quotaFetcher.FetchQuota(ctx, update.Code, w.log.With(zap.Uint64("update_id", update.ID)))
+	for task := range task {
+		w.log.Info("Processing task", zap.Any("task", task))
+		quota, err := w.quotaFetcher.FetchQuota(ctx, task.Code, w.log.With(zap.Uint64("task_id", task.ID)))
 		if err != nil {
-			w.log.Error("Failed to fetch quota", zap.Error(err))
-			update.Status = model.STATUS_FAILED
-			_, err = w.db.UpdateUpdate(ctx, update)
+			w.log.Error("Fetching quota", zap.Error(err))
+			task.Status = model.STATUS_FAILED
+			_, err = w.db.UpdateTask(ctx, task)
 			if err != nil {
-				w.log.Error("Failed to update quote status", zap.Error(err))
+				w.log.Error("Task quote status", zap.Error(err))
 			}
 			continue
 		}
-		update.Price = &quota
-		update.Status = model.STATUS_SUCCESS
-		_, err = w.db.UpdateUpdate(ctx, update)
+		task.Price = &quota
+		task.Status = model.STATUS_SUCCESS
+		_, err = w.db.UpdateTask(ctx, task)
 		if err != nil {
-			w.log.Error("Failed to update quote status", zap.Error(err))
+			w.log.Error("Task quote status", zap.Error(err))
 		}
 		w.log.Info("Fetched quota", zap.Any("quota", quota))
 	}
@@ -50,23 +50,23 @@ func (w *Worker) worker(ctx context.Context, update chan *model.Update, wg *sync
 func (w *Worker) doWork() {
 	ctx, cancel := context.WithTimeout(context.Background(), w.tick)
 	defer cancel()
-	updates, err := w.db.GetRecentlyUpdatesToProcess(ctx)
+	tasks, err := w.db.GetRecentlyTasksToProcess(ctx)
 	if err != nil {
-		w.log.Error("Failed to get recently updates to process", zap.Error(err))
+		w.log.Error("Get recently tasks to process", zap.Error(err))
 		return
 	}
-	chanUpdates := make(chan *model.Update)
+	chanTasks := make(chan *model.Task)
 
 	var wg sync.WaitGroup
 	for i := 0; i < w.numWorkers; i++ {
 		wg.Add(1)
-		go w.worker(ctx, chanUpdates, &wg)
+		go w.worker(ctx, chanTasks, &wg)
 	}
 
-	for _, update := range updates {
-		chanUpdates <- &update
+	for _, task := range tasks {
+		chanTasks <- &task
 	}
-	close(chanUpdates)
+	close(chanTasks)
 	wg.Wait()
 }
 

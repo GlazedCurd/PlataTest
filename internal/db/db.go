@@ -11,6 +11,10 @@ import (
 	"github.com/lib/pq"
 )
 
+const (
+	pgConflictCode = "23505" // unique_violation
+)
+
 var (
 	ErrorConflictWithDifferentBody = errors.New("conflict with different body")
 	ErrorNotFound                  = errors.New("not found")
@@ -18,11 +22,11 @@ var (
 
 type DB interface {
 	Close() error
-	InsertUpdate(ctx context.Context, update *model.Update) (*model.Update, error)
-	UpdateUpdate(ctx context.Context, update *model.Update) (*model.Update, error)
-	GetUpdate(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error)
-	GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (*model.Update, error)
-	GetRecentlyUpdatesToProcess(ctx context.Context) ([]model.Update, error)
+	InsertTask(ctx context.Context, task *model.Task) (*model.Task, error)
+	UpdateTask(ctx context.Context, task *model.Task) (*model.Task, error)
+	GetTask(ctx context.Context, code model.Code, taskId model.TaskId) (*model.Task, error)
+	GetLastSuccessfulTask(ctx context.Context, code model.Code) (*model.Task, error)
+	GetRecentlyTasksToProcess(ctx context.Context) ([]model.Task, error)
 }
 
 type dbImpl struct {
@@ -35,12 +39,12 @@ func ConnectDB(host, port, user, password, dbname string) (DB, error) {
 
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		return nil, fmt.Errorf("database initialization failed %w", err)
+		return nil, fmt.Errorf("database initialization %w", err)
 	}
 
 	err = db.Ping()
 	if err != nil {
-		return nil, fmt.Errorf("database ping failed %w", err)
+		return nil, fmt.Errorf("database ping %w", err)
 	}
 
 	log.Println("Successfully connected to the database")
@@ -51,99 +55,99 @@ func (d *dbImpl) Close() error {
 	return d.database.Close()
 }
 
-func (d *dbImpl) GetConflictedUpdate(ctx context.Context, idempotencyKey string, code model.Code) (*model.Update, error) {
-	var update model.Update
+func (d *dbImpl) GetConflictedTask(ctx context.Context, idempotencyKey string, code model.Code) (*model.Task, error) {
+	var task model.Task
 	err := d.database.QueryRowContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
         WHERE idempotency_key = $1 AND code = $2
         LIMIT 1
     `, idempotencyKey, code).Scan(
-		&update.ID,
-		&update.Code,
-		&update.IdempotencyKey,
-		&update.Price,
-		&update.Status,
-		&update.CreatedAt,
-		&update.UpdatedAt,
+		&task.ID,
+		&task.Code,
+		&task.IdempotencyKey,
+		&task.Price,
+		&task.Status,
+		&task.CreatedAt,
+		&task.TaskdAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrorConflictWithDifferentBody
 		}
-		return nil, fmt.Errorf("failed to check for conflicted update: %w", err)
+		return nil, fmt.Errorf("getting conflicted task: %w", err)
 	}
 
-	return &update, nil
+	return &task, nil
 }
 
-func (d *dbImpl) InsertUpdate(ctx context.Context, update *model.Update) (*model.Update, error) {
-	var updateRes model.Update
+func (d *dbImpl) InsertTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	var taskRes model.Task
 	err := d.database.QueryRowContext(ctx, `
         INSERT INTO quotes (code, idempotency_key) 
         VALUES ($1, $2) 
         RETURNING id, code, idempotency_key, quote, status, created_at, updated_at
-    `, update.Code, update.IdempotencyKey).Scan(
-		&updateRes.ID,
-		&updateRes.Code,
-		&updateRes.IdempotencyKey,
-		&updateRes.Price,
-		&updateRes.Status,
-		&updateRes.CreatedAt,
-		&updateRes.UpdatedAt,
+    `, task.Code, task.IdempotencyKey).Scan(
+		&taskRes.ID,
+		&taskRes.Code,
+		&taskRes.IdempotencyKey,
+		&taskRes.Price,
+		&taskRes.Status,
+		&taskRes.CreatedAt,
+		&taskRes.TaskdAt,
 	)
 
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
 			switch pqErr.Code {
-			case "23505": // unique_violation
-				updateResP, err := d.GetConflictedUpdate(ctx, update.IdempotencyKey, update.Code)
+			case pgConflictCode:
+				taskResP, err := d.GetConflictedTask(ctx, task.IdempotencyKey, task.Code)
 				if err != nil {
-					return nil, fmt.Errorf("failed to get conflicted update: %w", err)
+					return nil, fmt.Errorf("get conflicted task: %w", err)
 				}
-				return updateResP, nil
+				return taskResP, nil
 			default:
-				return nil, fmt.Errorf("database error [%s]: %s", pqErr.Code, pqErr.Message)
+				return nil, fmt.Errorf("database request [%s]: %s", pqErr.Code, pqErr.Message)
 			}
 		}
 		if err == sql.ErrNoRows {
 			return nil, ErrorNotFound
 		}
-		return nil, fmt.Errorf("failed to insert and scan update: %w", err)
+		return nil, fmt.Errorf("insert and scan task: %w", err)
 	}
 
-	return &updateRes, nil
+	return &taskRes, nil
 }
 
-func (d *dbImpl) GetUpdate(ctx context.Context, code model.Code, updateId model.UpdateId) (*model.Update, error) {
-	var update model.Update
+func (d *dbImpl) GetTask(ctx context.Context, code model.Code, taskId model.TaskId) (*model.Task, error) {
+	var task model.Task
 	err := d.database.QueryRowContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
         WHERE id = $1 AND code = $2
-    `, updateId, code).Scan(
-		&update.ID,
-		&update.Code,
-		&update.IdempotencyKey,
-		&update.Price,
-		&update.Status,
-		&update.CreatedAt,
-		&update.UpdatedAt,
+    `, taskId, code).Scan(
+		&task.ID,
+		&task.Code,
+		&task.IdempotencyKey,
+		&task.Price,
+		&task.Status,
+		&task.CreatedAt,
+		&task.TaskdAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrorNotFound
 		}
-		return nil, fmt.Errorf("failed to get update: %w", err)
+		return nil, fmt.Errorf("get task: %w", err)
 	}
 
-	return &update, nil
+	return &task, nil
 }
 
-func (d *dbImpl) UpdateUpdate(ctx context.Context, update *model.Update) (*model.Update, error) {
-	var updatedRes model.Update
+func (d *dbImpl) UpdateTask(ctx context.Context, task *model.Task) (*model.Task, error) {
+	var updatedRes model.Task
 	err := d.database.QueryRowContext(ctx, `
         UPDATE quotes 
         SET status = $1,
@@ -151,28 +155,28 @@ func (d *dbImpl) UpdateUpdate(ctx context.Context, update *model.Update) (*model
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $3
         RETURNING id, code, idempotency_key, quote, status, created_at, updated_at
-    `, update.Status, update.Price, update.ID).Scan(
+    `, task.Status, task.Price, task.ID).Scan(
 		&updatedRes.ID,
 		&updatedRes.Code,
 		&updatedRes.IdempotencyKey,
 		&updatedRes.Price,
 		&updatedRes.Status,
 		&updatedRes.CreatedAt,
-		&updatedRes.UpdatedAt,
+		&updatedRes.TaskdAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrorNotFound
 		}
-		return nil, fmt.Errorf("failed to update quote: %w", err)
+		return nil, fmt.Errorf("task quote: %w", err)
 	}
 
 	return &updatedRes, nil
 }
 
-func (d *dbImpl) GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (*model.Update, error) {
-	var update model.Update
+func (d *dbImpl) GetLastSuccessfulTask(ctx context.Context, code model.Code) (*model.Task, error) {
+	var task model.Task
 	err := d.database.QueryRowContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at
         FROM quotes
@@ -180,27 +184,27 @@ func (d *dbImpl) GetLastSuccessfulUpdate(ctx context.Context, code model.Code) (
         ORDER BY created_at DESC
         LIMIT 1
     `, code).Scan(
-		&update.ID,
-		&update.Code,
-		&update.IdempotencyKey,
-		&update.Price,
-		&update.Status,
-		&update.CreatedAt,
-		&update.UpdatedAt,
+		&task.ID,
+		&task.Code,
+		&task.IdempotencyKey,
+		&task.Price,
+		&task.Status,
+		&task.CreatedAt,
+		&task.TaskdAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ErrorNotFound
 		}
-		return nil, fmt.Errorf("failed to get last successful update: %w", err)
+		return nil, fmt.Errorf("get last successful task: %w", err)
 	}
 
-	return &update, nil
+	return &task, nil
 }
 
-func (d *dbImpl) GetRecentlyUpdatesToProcess(ctx context.Context) ([]model.Update, error) {
-	var updates []model.Update
+func (d *dbImpl) GetRecentlyTasksToProcess(ctx context.Context) ([]model.Task, error) {
+	var tasks []model.Task
 	rows, err := d.database.QueryContext(ctx, `
         SELECT id, code, idempotency_key, quote, status, created_at, updated_at	
         FROM quotes
@@ -208,25 +212,25 @@ func (d *dbImpl) GetRecentlyUpdatesToProcess(ctx context.Context) ([]model.Updat
         ORDER BY created_at DESC
     `)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get recently requested updates: %w", err)
+		return nil, fmt.Errorf("get recently requested tasks: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var update model.Update
+		var task model.Task
 		if err := rows.Scan(
-			&update.ID,
-			&update.Code,
-			&update.IdempotencyKey,
-			&update.Price,
-			&update.Status,
-			&update.CreatedAt,
-			&update.UpdatedAt,
+			&task.ID,
+			&task.Code,
+			&task.IdempotencyKey,
+			&task.Price,
+			&task.Status,
+			&task.CreatedAt,
+			&task.TaskdAt,
 		); err != nil {
-			return nil, fmt.Errorf("failed to scan update: %w", err)
+			return nil, fmt.Errorf("scan task: %w", err)
 		}
-		updates = append(updates, update)
+		tasks = append(tasks, task)
 	}
 
-	return updates, nil
+	return tasks, nil
 }

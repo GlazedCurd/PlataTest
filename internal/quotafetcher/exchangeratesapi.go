@@ -39,15 +39,20 @@ func NewExchangeratesQuotaFetcher(httpClient *http.Client, limiter *rate.Limiter
 	}
 }
 
-func (q *exchangeratesQuotaFetcher) DoRequest(ctx context.Context, url *url.URL, to string) (float64, bool, error) {
+func (q *exchangeratesQuotaFetcher) doRequest(ctx context.Context, url *url.URL, to string, logger *zap.Logger) (float64, bool, error) {
 	if err := q.rateLimiter.Wait(ctx); err != nil {
 		return 0, false, fmt.Errorf("rate limit canceled: %w", err)
 	}
 	resp, err := q.httpClient.Get(url.String())
 	if err != nil {
-		return 0, true, fmt.Errorf("failed to fetch quota: %w", err)
+		return 0, true, fmt.Errorf("fetch quota: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err := resp.Body.Close()
+		if err != nil {
+			logger.Error("closing response body", zap.Error(err))
+		}
+	}()
 
 	if resp.StatusCode >= 500 {
 		return 0, true, fmt.Errorf("server error: %s", resp.Status)
@@ -63,7 +68,7 @@ func (q *exchangeratesQuotaFetcher) DoRequest(ctx context.Context, url *url.URL,
 
 	var response exchangeratesResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return 0, false, fmt.Errorf("failed to decode response: %w", err)
+		return 0, false, fmt.Errorf("decode response: %w", err)
 	}
 
 	if !response.Success {
@@ -80,7 +85,7 @@ func (q *exchangeratesQuotaFetcher) DoRequest(ctx context.Context, url *url.URL,
 func (q *exchangeratesQuotaFetcher) FetchQuota(ctx context.Context, code string, logger *zap.Logger) (float64, error) {
 	u, err := url.Parse(q.baseUrl)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse base URL: %w", err)
+		return 0, fmt.Errorf("parse base URL: %w", err)
 	}
 
 	u.Path = "v1/latest"
@@ -100,9 +105,9 @@ func (q *exchangeratesQuotaFetcher) FetchQuota(ctx context.Context, code string,
 	currTimeout := 1
 	var lastError error
 	for i := 0; i < q.retriesLimit; i++ {
-		quota, retry, err := q.DoRequest(ctx, u, to)
+		quota, retry, err := q.doRequest(ctx, u, to, logger)
 		if err != nil {
-			logger.Error("Failed to fetch quota", zap.Error(err), zap.Int("retry", i))
+			logger.Error("fetch quota", zap.Error(err), zap.Int("retry", i))
 			lastError = err
 			if !retry {
 				break
@@ -114,5 +119,5 @@ func (q *exchangeratesQuotaFetcher) FetchQuota(ctx context.Context, code string,
 		return quota, nil
 	}
 
-	return 0, fmt.Errorf("failed to fetch quota after retiries %w", lastError)
+	return 0, fmt.Errorf("fetch quota after retiries %w", lastError)
 }
